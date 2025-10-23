@@ -160,6 +160,8 @@ class ParkRunPredictor:
         if save_model:
             with open(SCALER_SAVE_PATH, 'wb') as f:
                 pickle.dump((self.scaler_X, self.scaler_y), f)
+            # Save data hash for future freshness checks
+            self._save_data_hash()
         
         print(f"\nTraining Summary:")
         print(f"  Final Learning Rate: {self.model.optimizer.learning_rate.numpy():.2e}")
@@ -276,12 +278,54 @@ class ParkRunPredictor:
     
     def check_data_freshness(self) -> bool:
         if not os.path.exists(MODEL_SAVE_PATH):
+            print("No model found, will train new model")
             return True
         
-        data_mtime = os.path.getmtime(self.data_file)
-        model_mtime = os.path.getmtime(MODEL_SAVE_PATH)
+        # Check if data hash file exists
+        hash_file = MODEL_SAVE_PATH.replace('.keras', '_data_hash.txt')
+        if not os.path.exists(hash_file):
+            print("No data hash found, will retrain model")
+            return True
         
-        return data_mtime > model_mtime
+        # Calculate current data hash
+        current_hash = self._calculate_data_hash()
+        
+        # Read stored hash
+        try:
+            with open(hash_file, 'r') as f:
+                stored_hash = f.read().strip()
+            
+            if current_hash != stored_hash:
+                print("Data content changed, retraining model")
+                return True
+            else:
+                print("Data content unchanged, using existing model")
+                return False
+        except:
+            print("Error reading data hash, will retrain model")
+            return True
+    
+    def _calculate_data_hash(self) -> str:
+        """Calculate hash of the actual data content, not file modification time."""
+        import hashlib
+        
+        if not os.path.exists(self.data_file):
+            return ""
+        
+        # Read the CSV file and calculate hash of content
+        with open(self.data_file, 'rb') as f:
+            content = f.read()
+        
+        # Calculate MD5 hash of the file content
+        return hashlib.md5(content).hexdigest()
+    
+    def _save_data_hash(self) -> None:
+        """Save the current data hash for future comparison."""
+        hash_file = MODEL_SAVE_PATH.replace('.keras', '_data_hash.txt')
+        current_hash = self._calculate_data_hash()
+        
+        with open(hash_file, 'w') as f:
+            f.write(current_hash)
     
     def run_full_pipeline(self, retrain: bool = False) -> None:
         self.df = pd.read_csv(self.data_file)

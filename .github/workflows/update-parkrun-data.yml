@@ -27,21 +27,37 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create output directory
-      run: mkdir -p output
+    - name: Create directories
+      run: |
+        mkdir -p output
+        mkdir -p models
     
     - name: Run ParkRun scraper
       run: |
         python park_run_scraper.py
       continue-on-error: true
     
+    - name: Train/retrain model if data changed
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        echo "New data detected, training model..."
+        echo "Starting model training with new data..."
+        python park_run_speed_predict.py 1 --retrain
+        echo "Model training completed successfully!"
+      continue-on-error: true
+    
     - name: Check for changes
       id: changes
       run: |
+        echo "Checking for changes..."
+        git status --porcelain
         if [ -n "$(git status --porcelain)" ]; then
           echo "changes=true" >> $GITHUB_OUTPUT
+          echo "Files changed:"
+          git status --porcelain
         else
           echo "changes=false" >> $GITHUB_OUTPUT
+          echo "No changes detected"
         fi
     
     - name: Configure Git
@@ -54,7 +70,8 @@ jobs:
       if: steps.changes.outputs.changes == 'true'
       run: |
         git add output/park_run_results.csv
-        git commit -m "Auto-update: New ParkRun data scraped on $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        git add models/ || true
+        git commit -m "Auto-update: New ParkRun data scraped and model retrained on $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         git push
       env:
         GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
