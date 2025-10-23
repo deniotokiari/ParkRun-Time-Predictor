@@ -4,11 +4,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-import sys
 import warnings
-import subprocess
-import json
-import tempfile
 import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
