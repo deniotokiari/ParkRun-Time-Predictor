@@ -334,58 +334,21 @@ def format_pace(pace_min_per_km):
     return f"{minutes}:{seconds:02d}"
 
 def predict_direct(position, month=None):
-    try:
-        from park_run_speed_predict import ParkRunPredictor
-        
-        predictor = ParkRunPredictor()
-        predictor.run_full_pipeline()
-        
-        result = predictor.predict(position, month)
-        
-        return {
-            "success": True,
-            "time_seconds": float(result["time_seconds"]),
-            "time_minutes": float(result["time_minutes"]),
-            "pace_min_per_km": float(result["pace_min_per_km"]),
-            "position": int(result["position"]),
-            "month": int(result["month"]),
-            "participants": float(result["participants"])
-        }
-        
-    except ImportError as e:
-        return predict_mock(position, month)
-    except Exception as e:
-        return predict_mock(position, month)
-
-def predict_mock(position, month=None):
-    """Mock prediction for Streamlit Cloud deployment."""
-    import random
-    from datetime import datetime, timedelta
+    from park_run_speed_predict import ParkRunPredictor
     
-    if month is None:
-        today = datetime.now()
-        days_ahead = 5 - today.weekday()
-        if days_ahead <= 0:
-            days_ahead += 7
-        next_saturday = today + timedelta(days_ahead)
-        month = next_saturday.month
+    predictor = ParkRunPredictor()
+    predictor.run_full_pipeline()
     
-    # Simple mock calculation based on position
-    base_time = 1200  # 20 minutes base time
-    position_factor = position * 2  # 2 seconds per position
-    seasonal_factor = 0 if month in [6, 7, 8] else 30  # Summer is faster
-    
-    time_seconds = base_time + position_factor + seasonal_factor + random.randint(-30, 30)
-    pace_min_per_km = (time_seconds / 60) / 5.0  # 5km distance
+    result = predictor.predict(position, month)
     
     return {
         "success": True,
-        "time_seconds": float(time_seconds),
-        "time_minutes": float(time_seconds / 60),
-        "pace_min_per_km": float(pace_min_per_km),
-        "position": int(position),
-        "month": int(month),
-        "participants": 100.0
+        "time_seconds": float(result["time_seconds"]),
+        "time_minutes": float(result["time_minutes"]),
+        "pace_min_per_km": float(result["pace_min_per_km"]),
+        "position": int(result["position"]),
+        "month": int(result["month"]),
+        "participants": float(result["participants"])
     }
 
 def main():
