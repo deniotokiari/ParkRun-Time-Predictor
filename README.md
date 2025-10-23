@@ -16,7 +16,7 @@ A machine learning-powered web application that predicts your ParkRun finish tim
 
 ## 🚀 Live Demo
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-url.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://parkrun-time-predictor.streamlit.app/)
 
 ## 🎯 How It Works
 
