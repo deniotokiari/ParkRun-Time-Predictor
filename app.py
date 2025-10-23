@@ -367,11 +367,11 @@ def predict_direct(position, month=None):
 def main():
     st.markdown(CSS_STYLES, unsafe_allow_html=True)
     
-    st.markdown('<div class="main-header">PARKRUN PREDICTOR</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><a href="https://www.parkrun.pl/krakow/" style="color: #0f380f; text-decoration: none;">PARKRUN</a> PREDICTOR</div>', unsafe_allow_html=True)
     
     st.markdown("""
     <div style="text-align: center; color: #0f380f; margin-bottom: 2rem; font-size: 0.6rem; font-family: 'Press Start 2P', monospace;">
-        PREDICT YOUR PARKRUN FINISH TIME<br>
+        PREDICT YOUR <a href="https://www.parkrun.pl/krakow/" style="color: #0f380f; text-decoration: none;">PARKRUN</a> FINISH TIME<br>
         BASED ON YOUR EXPECTED POSITION
     </div>
     """, unsafe_allow_html=True)
@@ -487,7 +487,7 @@ def main():
     
     st.markdown("""
     <div class="footer">
-        <p>PARKRUN PREDICTOR | POWERED BY <a href="mailto:deniotokiari@gmail.com">@DENIOTOKIARI</a></p>
+        <p><a href="https://www.parkrun.pl/krakow/" style="color: #0f380f; text-decoration: none;">PARKRUN</a> PREDICTOR | POWERED BY <a href="mailto:deniotokiari@gmail.com">@DENIOTOKIARI</a></p>
     </div>
     """, unsafe_allow_html=True)
 
