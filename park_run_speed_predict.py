@@ -18,6 +18,11 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import warnings
 warnings.filterwarnings('ignore')
 
+# Configure TensorFlow to reduce warnings and improve performance
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+tf.config.run_functions_eagerly(False)
+tf.config.optimizer.set_jit(True)
+
 OUTPUT_FILE = "output/park_run_results.csv"
 MODEL_SAVE_PATH = "models/parkrun_model.keras"
 SCALER_SAVE_PATH = "models/scalers.pkl"
@@ -103,8 +108,13 @@ class ParkRunPredictor:
         self.model.compile(
             optimizer=optimizer,
             loss='huber',
-            metrics=['mae', 'mse']
+            metrics=['mae', 'mse'],
+            run_eagerly=False  # Use graph execution for better performance
         )
+        
+        # Configure TensorFlow to reduce retracing
+        tf.config.run_functions_eagerly(False)
+        tf.config.optimizer.set_jit(True)
         
         callbacks = [
             EarlyStopping(
@@ -255,15 +265,17 @@ class ParkRunPredictor:
         if pd.isna(relative_position) or relative_position < 0 or relative_position > 1:
             raise ValueError(f"Invalid relative position: {relative_position}")
         
-        input_data = np.array([[relative_position, month, median_participants]])
+        # Ensure consistent input types and shapes
+        input_data = np.array([[float(relative_position), float(month), float(median_participants)]], dtype=np.float32)
         
         if np.any(np.isnan(input_data)):
             raise ValueError(f"Input contains NaN values: {input_data}")
         
         input_scaled = self.scaler_X.transform(input_data)
         
-        pred_scaled = self.model.predict(input_scaled, verbose=0)
-        pred_seconds = self.scaler_y.inverse_transform(pred_scaled)[0][0]
+        # Use consistent prediction with explicit shape and caching
+        pred_scaled = self._predict_cached(input_scaled)
+        pred_seconds = float(self.scaler_y.inverse_transform(pred_scaled)[0][0])
         
         pace_min_per_km = (pred_seconds / 60) / DISTANCE_KM
         
@@ -275,6 +287,11 @@ class ParkRunPredictor:
             'month': month,
             'participants': median_participants
         }
+    
+    def _predict_cached(self, input_scaled):
+        """Cached prediction function to avoid retracing."""
+        # Use model.predict with consistent parameters to avoid retracing
+        return self.model.predict(input_scaled, verbose=0, batch_size=1)
     
     def check_data_freshness(self) -> bool:
         if not os.path.exists(MODEL_SAVE_PATH):

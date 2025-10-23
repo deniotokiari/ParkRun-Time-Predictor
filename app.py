@@ -429,12 +429,6 @@ def main():
                                 align-items: center;
                                 justify-content: center;
                             ">
-                                <div style="
-                                    color: #0f380f;
-                                    font-family: 'Press Start 2P', monospace !important;
-                                    font-size: 8px;
-                                    font-weight: bold;
-                                ">{i}%</div>
                             </div>
                         </div>
                     </div>
