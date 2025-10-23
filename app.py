@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+"""
+🏃‍♂️ ParkRun Time Predictor
+
+AI-powered ParkRun finish time prediction with Game Boy design.
+Uses machine learning to predict your finish time based on position.
+
+Features:
+- Neural network trained on historical ParkRun data
+- Game Boy retro aesthetic with pixel-perfect design
+- Position-based predictions with seasonal analysis
+- Mobile-friendly responsive design
+
+Data Source: ParkRun Krakow historical results
+ML Model: TensorFlow/Keras neural network
+Auto-Retraining: Weekly updates via GitHub Actions
+
+Author: @deniotokiari
+"""
 
 import streamlit as st
 import pandas as pd

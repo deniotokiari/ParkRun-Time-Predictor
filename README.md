@@ -1,6 +1,10 @@
 # 🏃‍♂️ ParkRun Time Predictor
 
-A machine learning-powered web application that predicts your ParkRun finish time based on your expected position.
+![App Preview](app-preview.png)
+
+**🎮 AI-Powered ParkRun Time Prediction with Game Boy Design**
+
+A machine learning-powered web application that predicts your ParkRun finish time based on your expected position. Features a nostalgic Game Boy aesthetic with pixel-perfect design and neural network predictions.
 
 ## 🎮 Features
 

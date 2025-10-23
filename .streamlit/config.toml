@@ -10,10 +10,3 @@ headless = true
 
 [client]
 showErrorDetails = false
-
-[global]
-# App metadata
-appName = "ParkRun Time Predictor"
-appDescription = "AI-powered ParkRun finish time prediction with Game Boy design"
-appIcon = "🏃‍♂️"
-appUrl = "https://www.parkrun.pl/krakow/"
