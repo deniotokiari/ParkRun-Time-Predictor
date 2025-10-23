@@ -1,0 +1,64 @@
+name: Update ParkRun Data
+
+on:
+  schedule:
+    # Run every Saturday at 8:00 PM UTC
+    - cron: '0 20 * * 6'
+  workflow_dispatch:
+    # Allow manual triggering for testing
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full history for the scraper to work properly
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create output directory
+      run: mkdir -p output
+    
+    - name: Run ParkRun scraper
+      run: |
+        python park_run_scraper.py
+      continue-on-error: true
+    
+    - name: Check for changes
+      id: changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Configure Git
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action Bot"
+    
+    - name: Commit and push changes
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        git add output/park_run_results.csv
+        git commit -m "Auto-update: New ParkRun data scraped on $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: No changes detected
+      if: steps.changes.outputs.changes == 'false'
+      run: echo "No new data found. Skipping commit."
