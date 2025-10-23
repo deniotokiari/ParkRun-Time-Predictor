@@ -26,6 +26,19 @@ CSS_STYLES = """
         image-rendering: pixelated;
     }
     
+    /* Hide Streamlit header and footer */
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    
+    footer {
+        display: none;
+    }
+    
+    #MainMenu {
+        visibility: hidden;
+    }
+    
     * {
         font-family: 'Press Start 2P', monospace !important;
     }
