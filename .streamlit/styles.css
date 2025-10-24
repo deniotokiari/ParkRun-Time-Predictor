@@ -77,55 +77,6 @@ h1, h2, h3, h4, h5, h6, p, div, span, label, input, button, textarea, select {
     font-weight: bold;
 }
 
-.stNumberInput > label {
-    color: #0f380f !important;
-    font-family: 'Press Start 2P', monospace !important;
-    font-size: 0.7rem !important;
-    text-transform: uppercase;
-}
-
-.stNumberInput > div {
-    background-color: transparent;
-}
-
-.stNumberInput > div > div > input {
-    background-color: #8bac0f;
-    border: 3px solid #0f380f;
-    border-radius: 0;
-    color: #0f380f;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.7rem;
-    padding: 0.5rem;
-    box-shadow: 3px 3px 0px #0f380f;
-}
-
-.stNumberInput > div > div > input:focus {
-    background-color: #9bbc0f;
-    border: 3px solid #306230;
-    box-shadow: 3px 3px 0px #306230;
-    outline: none;
-}
-
-.stNumberInput button {
-    background-color: #306230 !important;
-    border: 3px solid #0f380f !important;
-    border-radius: 0 !important;
-    color: #9bbc0f !important;
-    font-family: 'Press Start 2P', monospace !important;
-    box-shadow: 2px 2px 0px #0f380f !important;
-}
-
-.stNumberInput button:hover {
-    background-color: #0f380f !important;
-    color: #9bbc0f !important;
-    box-shadow: 3px 3px 0px #306230 !important;
-}
-
-.stNumberInput button:focus {
-    outline: none !important;
-    box-shadow: 2px 2px 0px #0f380f !important;
-}
-
 .stTextInput > div > div > input {
     background-color: #8bac0f !important;
     border: 3px solid #0f380f !important;

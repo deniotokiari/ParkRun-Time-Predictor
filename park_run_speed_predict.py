@@ -262,7 +262,10 @@ class ParkRunPredictor:
         
         relative_position = (position - 1) / (median_participants - 1)
         
-        if pd.isna(relative_position) or relative_position < 0 or relative_position > 1:
+        # Clamp relative position to valid range [0, 1]
+        relative_position = max(0.0, min(1.0, relative_position))
+        
+        if pd.isna(relative_position):
             raise ValueError(f"Invalid relative position: {relative_position}")
         
         # Ensure consistent input types and shapes
