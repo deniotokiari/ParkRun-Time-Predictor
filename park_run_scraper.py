@@ -77,7 +77,8 @@ class ParkRunScraper:
             text = cell.get_text(strip=True)
             position = re.sub(r'[^\d]', '', text)
             return position if position else ""
-        except:
+        except Exception as e:
+            print(f"Error extracting position: {e}")
             return ""
     
     def _extract_time(self, cell) -> str:
@@ -89,7 +90,8 @@ class ParkRunScraper:
             elif len(parts) == 3:
                 return str(int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2]))
             return ""
-        except:
+        except Exception as e:
+            print(f"Error extracting position: {e}")
             return ""
     
     def _extract_event_date(self, html_content: str) -> Optional[int]:
@@ -119,7 +121,8 @@ class ParkRunScraper:
                             return int(month)
             
             return None
-        except:
+        except Exception as e:
+            print(f"Error in get_last_event_id: {e}")
             return None
     
     def scrape_event(self, event_id: int) -> tuple[Optional[int], int, List[ParkRunResult]]:

@@ -260,7 +260,11 @@ class ParkRunPredictor:
         if pd.isna(median_participants) or median_participants <= 1:
             raise ValueError(f"Invalid participants data: {median_participants}")
         
-        relative_position = (position - 1) / (median_participants - 1)
+        # Prevent division by zero
+        if median_participants <= 1:
+            relative_position = 0.0 if position == 1 else 1.0
+        else:
+            relative_position = (position - 1) / (median_participants - 1)
         
         # Clamp relative position to valid range [0, 1]
         relative_position = max(0.0, min(1.0, relative_position))
@@ -348,8 +352,14 @@ class ParkRunPredictor:
             f.write(current_hash)
     
     def run_full_pipeline(self, retrain: bool = False) -> None:
-        self.df = pd.read_csv(self.data_file)
-        print(f"Loaded {len(self.df)} records")
+        try:
+            self.df = pd.read_csv(self.data_file)
+            print(f"Loaded {len(self.df)} records")
+        except Exception as e:
+            raise FileNotFoundError(f"Could not load data file {self.data_file}: {e}")
+        
+        if len(self.df) == 0:
+            raise ValueError("Data file is empty")
         
         initial_count = len(self.df)
         self.df = self.df[self.df['time'] != '']
@@ -359,6 +369,14 @@ class ParkRunPredictor:
         
         print(f"Cleaned data: removed {initial_count - len(self.df)} invalid records")
         print(f"Remaining records: {len(self.df)}")
+        
+        if len(self.df) == 0:
+            raise ValueError("No valid data remaining after cleaning")
+        
+        # Prevent division by zero in relative position calculation
+        self.df = self.df[self.df['participants'] > 1]  # Remove single-participant events
+        if len(self.df) == 0:
+            raise ValueError("No valid data with multiple participants")
         
         self.df['relative_position'] = (self.df['position'] - 1) / (self.df['participants'] - 1)
         
@@ -373,7 +391,7 @@ class ParkRunPredictor:
             X, y = self.prepare_features(self.df)
             self.train_model(X, y)
         else:
-            if self.load_model():
+            if self.load_model() and self.model is not None:
                 print("✅ Using existing model (data is up to date)")
             else:
                 print("⚠️ Could not load existing model, training new one...")
