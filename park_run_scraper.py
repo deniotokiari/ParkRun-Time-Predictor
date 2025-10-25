@@ -127,6 +127,9 @@ class ParkRunScraper:
     
     def scrape_event(self, event_id: int) -> tuple[Optional[int], int, List[ParkRunResult]]:
         html_content = self.get_results_page(event_id)
+
+        print(f"content => {html_content}")
+
         if not html_content:
             return None, 0, []
         
