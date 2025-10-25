@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import re
+import argparse
 from typing import List, Optional
 from dataclasses import dataclass
 import random
@@ -128,8 +129,6 @@ class ParkRunScraper:
     def scrape_event(self, event_id: int) -> tuple[Optional[int], int, List[ParkRunResult]]:
         html_content = self.get_results_page(event_id)
 
-        print(f"content => {html_content}")
-
         if not html_content:
             return None, 0, []
         
@@ -186,9 +185,33 @@ def _get_last_event_id(csv_file: str) -> int:
     except (ValueError, KeyError, FileNotFoundError):
         return 1
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Scrape ParkRun results from Krakow events',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python park_run_scraper.py                    # Run without delays (fast)
+  python park_run_scraper.py --enable-delays   # Run with delays between requests
+        """
+    )
+    
+    parser.add_argument(
+        '--enable-delays', 
+        action='store_true',
+        help='Enable delays between requests (default: disabled for faster execution)'
+    )
+    
+    return parser.parse_args()
+
 if __name__ == "__main__":
+    args = parse_arguments()
+    
     print("="*50)
     print("PARKRUN SCRAPER STARTED")
+    print("="*50)
+    print(f"Delays between requests: {'ENABLED' if args.enable_delays else 'DISABLED'}")
     print("="*50)
     
     scraper = ParkRunScraper()
@@ -204,9 +227,8 @@ if __name__ == "__main__":
         print(f"Resuming from event ID: {event_id}")
     
     events_scraped = 0
-    max_events = 10  # Limit to prevent infinite loops in CI
     
-    while events_scraped < max_events:
+    while True:
         print(f"\n--- Scraping Event {event_id} ---")
         
         try:
@@ -218,9 +240,12 @@ if __name__ == "__main__":
                 events_scraped += 1
                 event_id += 1
 
-                #delay = random.uniform(REQUEST_DELAY_FLOOR, REQUEST_DELAY_CELL)
-                #print(f"Waiting {delay:.1f} seconds before next request...")
-                #time.sleep(delay)
+                if args.enable_delays:
+                    delay = random.uniform(REQUEST_DELAY_FLOOR, REQUEST_DELAY_CELL)
+                    print(f"Waiting {delay:.1f} seconds before next request...")
+                    time.sleep(delay)
+                else:
+                    print("Skipping delay (disabled for faster execution)")
             else:
                 print(f"No results found for event {event_id}. Stopping scraper.")
                 break
