@@ -184,27 +184,47 @@ def _get_last_event_id(csv_file: str) -> int:
         return 1
 
 if __name__ == "__main__":
+    print("="*50)
+    print("PARKRUN SCRAPER STARTED")
+    print("="*50)
+    
     scraper = ParkRunScraper()
     
     event_id = _get_last_event_id(OUTPUT_FILE)
+    print(f"Starting from event ID: {event_id}")
 
     if event_id == 1:
+        print("Initializing CSV file...")
         _initialize_csv_file(OUTPUT_FILE)
     else:
         event_id += 1
+        print(f"Resuming from event ID: {event_id}")
     
-    while True:
-        month, participants, results = scraper.scrape_event(event_id)
+    events_scraped = 0
+    max_events = 10  # Limit to prevent infinite loops in CI
+    
+    while events_scraped < max_events:
+        print(f"\n--- Scraping Event {event_id} ---")
+        
+        try:
+            month, participants, results = scraper.scrape_event(event_id)
+            
+            if results:
+                print(f"Found {len(results)} results for event {event_id}")
+                _append_batch_to_csv(event_id, results, month, participants, OUTPUT_FILE)
+                events_scraped += 1
+                event_id += 1
 
-        if results:
-            _append_batch_to_csv(event_id, results, month, participants, OUTPUT_FILE)
-
-            event_id += 1
-
-            delay = random.uniform(REQUEST_DELAY_FLOOR, REQUEST_DELAY_CELL)
-
-            print(f"Wait for {delay}")
-
-            time.sleep(delay)
-        else:
+                #delay = random.uniform(REQUEST_DELAY_FLOOR, REQUEST_DELAY_CELL)
+                #print(f"Waiting {delay:.1f} seconds before next request...")
+                #time.sleep(delay)
+            else:
+                print(f"No results found for event {event_id}. Stopping scraper.")
+                break
+                
+        except Exception as e:
+            print(f"Error scraping event {event_id}: {e}")
             break
+    
+    print(f"\nScraping completed. Processed {events_scraped} events.")
+    print("="*50)
