@@ -349,7 +349,7 @@ class ParkRunPredictor:
             return True
     
     def _calculate_data_hash(self) -> str:
-        """Calculate hash of the actual data content, not file modification time."""
+        """Calculate hash of the data content AND model architecture."""
         import hashlib
         
         if not os.path.exists(self.data_file):
@@ -359,8 +359,22 @@ class ParkRunPredictor:
         with open(self.data_file, 'rb') as f:
             content = f.read()
         
-        # Calculate MD5 hash of the file content
-        return hashlib.md5(content).hexdigest()
+        # Include model architecture and parameters in hash
+        # This ensures retraining when model architecture changes
+        model_config = {
+            "features": 4,  # Number of input features
+            "feature_names": ["relative_position", "month", "n_in_month", "participants"],
+            "model_version": "2.0"  # Increment when architecture changes
+        }
+        
+        # Convert model config to bytes
+        model_arch = str(model_config).encode('utf-8')
+        
+        # Combine data content with model architecture
+        combined_content = content + model_arch
+        
+        # Calculate MD5 hash of the combined content
+        return hashlib.md5(combined_content).hexdigest()
     
     def _save_data_hash(self) -> None:
         """Save the current data hash for future comparison."""
