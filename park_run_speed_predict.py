@@ -351,6 +351,68 @@ class ParkRunPredictor:
         with open(hash_file, 'w') as f:
             f.write(current_hash)
     
+    def _predict_missing_times(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Predict missing time values based on surrounding values within the same event_id.
+        Handles cases where missing values are at the beginning, middle, or end of an event.
+        """
+        df = df.copy()
+        
+        # Convert time column to numeric, keeping NaN for missing values
+        df['time'] = pd.to_numeric(df['time'], errors='coerce')
+        
+        # Group by event_id to process each event separately
+        for event_id, group in df.groupby('event_id'):
+            # Get positions and times for this event
+            positions = group['position'].values
+            times = group['time'].values
+            
+            # Find missing time indices
+            missing_indices = np.isnan(times)
+            
+            if not missing_indices.any():
+                continue  # No missing values in this event
+            
+            print(f"Event {event_id}: Found {missing_indices.sum()} missing time values")
+            
+            # Predict missing times using linear interpolation
+            valid_indices = ~missing_indices
+            
+            if valid_indices.sum() < 2:
+                # Not enough valid data points for interpolation
+                print(f"Event {event_id}: Not enough valid data for interpolation, using median time")
+                median_time = df[df['event_id'] == event_id]['time'].median()
+                if pd.isna(median_time):
+                    # Use overall median if event median is NaN
+                    median_time = df['time'].median()
+                times[missing_indices] = median_time
+            else:
+                # Use linear interpolation based on position
+                valid_positions = positions[valid_indices]
+                valid_times = times[valid_indices]
+                
+                # Interpolate missing times based on position
+                interpolated_times = np.interp(positions[missing_indices], 
+                                            valid_positions, 
+                                            valid_times)
+                times[missing_indices] = interpolated_times
+                
+                # Handle edge cases (first/last positions)
+                if missing_indices[0]:  # First position is missing
+                    # Use the next valid time minus a small increment
+                    next_valid_time = times[~missing_indices][0]
+                    times[0] = max(0, next_valid_time - 5)  # 5 seconds faster than next
+                    
+                if missing_indices[-1]:  # Last position is missing
+                    # Use the previous valid time plus a small increment
+                    prev_valid_time = times[~missing_indices][-1]
+                    times[-1] = prev_valid_time + 5  # 5 seconds slower than previous
+            
+            # Update the dataframe
+            df.loc[df['event_id'] == event_id, 'time'] = times
+        
+        return df
+    
     def run_full_pipeline(self, retrain: bool = False) -> None:
         try:
             self.df = pd.read_csv(self.data_file)
@@ -362,12 +424,17 @@ class ParkRunPredictor:
             raise ValueError("Data file is empty")
         
         initial_count = len(self.df)
-        self.df = self.df[self.df['time'] != '']
+        
+        # Instead of removing empty time rows, predict missing values
+        print("Predicting missing time values...")
+        self.df = self._predict_missing_times(self.df)
+        
+        # Remove rows with still invalid data
         self.df = self.df[self.df['time'].notna()]
         self.df = self.df[self.df['position'] > 0]
         self.df = self.df[self.df['participants'] > 0]
         
-        print(f"Cleaned data: removed {initial_count - len(self.df)} invalid records")
+        print(f"Cleaned data: processed {initial_count - len(self.df)} invalid records")
         print(f"Remaining records: {len(self.df)}")
         
         if len(self.df) == 0:
