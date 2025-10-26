@@ -7,12 +7,44 @@ import argparse
 from typing import List, Optional
 from dataclasses import dataclass
 import random
+from datetime import datetime
 
 OUTPUT_FILE = "output/park_run_results.csv"
 PARK_RUN_HISTORY_URI = "https://www.parkrun.pl/krakow/results/{id}"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-REQUEST_DELAY_FLOOR = 30.0
-REQUEST_DELAY_CELL = 60.0
+REQUEST_DELAY_FLOOR = 15.0
+REQUEST_DELAY_CELL = 30.0
+
+def get_saturday_number_in_month(date_str: str) -> int:
+    """
+    Calculate which Saturday of the month the given date is.
+    Returns 0 if the date is not a Saturday.
+    """
+    try:
+        # Parse the date string (format: "DD MMM YYYY" like "25 Oct 2024")
+        date_obj = datetime.strptime(date_str, "%d %b %Y")
+        
+        # Check if it's a Saturday (weekday() returns 5 for Saturday)
+        if date_obj.weekday() != 5:
+            return 0
+        
+        # Calculate which Saturday of the month it is
+        # Get the first day of the month
+        first_day = date_obj.replace(day=1)
+        
+        # Find the first Saturday of the month
+        first_saturday = first_day
+        while first_saturday.weekday() != 5:
+            first_saturday = first_saturday.replace(day=first_saturday.day + 1)
+        
+        # Calculate the Saturday number
+        saturday_number = ((date_obj - first_saturday).days // 7) + 1
+        
+        return saturday_number
+        
+    except Exception as e:
+        print(f"Error parsing date '{date_str}': {e}")
+        return 0
 
 @dataclass
 class ParkRunResult:
@@ -92,10 +124,11 @@ class ParkRunScraper:
                 return str(int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2]))
             return ""
         except Exception as e:
-            print(f"Error extracting position: {e}")
+            print(f"Error extracting time: {e}")
             return ""
     
-    def _extract_event_date(self, html_content: str) -> Optional[int]:
+    def _extract_event_date_info(self, html_content: str) -> tuple[Optional[int], int]:
+        """Extract the event date and return both month and n_in_month."""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
@@ -119,43 +152,55 @@ class ParkRunScraper:
                         match = re.search(pattern, text)
                         if match:
                             day, month, year = match.groups()
-                            return int(month)
+                            # Create date object once
+                            date_obj = datetime(int(year), int(month), int(day))
+                            
+                            # Extract month
+                            month_value = date_obj.month
+                            
+                            # Calculate Saturday number
+                            n_in_month = get_saturday_number_in_month(date_obj.strftime("%d %b %Y"))
+                            
+                            print(f"Extracted date: {date_obj.strftime('%Y-%m-%d')} (month: {month_value}, n_in_month: {n_in_month})")
+                            return month_value, n_in_month
             
-            return None
+            return None, 0
         except Exception as e:
-            print(f"Error in get_last_event_id: {e}")
-            return None
+            print(f"Error extracting date info: {e}")
+            return None, 0
     
-    def scrape_event(self, event_id: int) -> tuple[Optional[int], int, List[ParkRunResult]]:
+    def scrape_event(self, event_id: int, verbose: bool = True) -> tuple[Optional[int], int, int, List[ParkRunResult]]:
         html_content = self.get_results_page(event_id)
 
-        print(f"Content => {html_content}")
+        if verbose:
+            print(f"Content => {html_content}")
 
         if not html_content:
-            return None, 0, []
+            return None, 0, 0, []
         
-        month = self._extract_event_date(html_content)
+        # Extract both month and n_in_month in one call
+        month, n_in_month = self._extract_event_date_info(html_content)
         results = self.parse_results(html_content)
         participants = len(results)
         
-        print(f"Scraped {participants} results for event {event_id} (month: {month})")
-        return month, participants, results
+        print(f"Scraped {participants} results for event {event_id} (month: {month}, n_in_month: {n_in_month})")
+        return month, participants, n_in_month, results
 
 def _initialize_csv_file(filename: str):
     import csv
     
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['event_id', 'position', 'time', 'month', 'participants']
+        fieldnames = ['event_id', 'position', 'time', 'month', 'n_in_month', 'participants']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
     
     print(f"📄 Initialized CSV file: {filename}")
 
-def _append_batch_to_csv(event_id, batch_data: List[ParkRunResult], month: Optional[int], participants: int, filename: str):
+def _append_batch_to_csv(event_id, batch_data: List[ParkRunResult], month: Optional[int], n_in_month: int, participants: int, filename: str):
     import csv
     
     with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['event_id', 'position', 'time', 'month', 'participants']
+        fieldnames = ['event_id', 'position', 'time', 'month', 'n_in_month', 'participants']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         
         for result in batch_data:
@@ -164,6 +209,7 @@ def _append_batch_to_csv(event_id, batch_data: List[ParkRunResult], month: Optio
                 'position': result.position,
                 'time': result.time_seconds,
                 'month': month if month is not None else "",
+                'n_in_month': n_in_month,
                 'participants': participants
             })
 
@@ -234,11 +280,12 @@ if __name__ == "__main__":
         print(f"\n--- Scraping Event {event_id} ---")
         
         try:
-            month, participants, results = scraper.scrape_event(event_id)
+            verbose = not args.enable_delays
+            month, participants, n_in_month, results = scraper.scrape_event(event_id, verbose=verbose)
             
             if results:
                 print(f"Found {len(results)} results for event {event_id}")
-                _append_batch_to_csv(event_id, results, month, participants, OUTPUT_FILE)
+                _append_batch_to_csv(event_id, results, month, n_in_month, participants, OUTPUT_FILE)
                 events_scraped += 1
                 event_id += 1
 
