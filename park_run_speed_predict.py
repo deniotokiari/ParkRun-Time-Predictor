@@ -28,6 +28,20 @@ MODEL_SAVE_PATH = "models/parkrun_model.keras"
 SCALER_SAVE_PATH = "models/scalers.pkl"
 DISTANCE_KM = 5.0
 
+def calculate_saturday_number(date) -> int:
+    """Calculate which Saturday of the month (1-5) the date is, or 0 if not Saturday."""
+    if date.weekday() != 5:  # Not Saturday
+        return 0
+    
+    # Find first Saturday of month
+    first_day = date.replace(day=1)
+    first_saturday = first_day
+    while first_saturday.weekday() != 5:
+        first_saturday = first_saturday.replace(day=first_saturday.day + 1)
+    
+    # Calculate which Saturday
+    return ((date - first_saturday).days // 7) + 1
+
 class ParkRunPredictor:
     def __init__(self, data_file: str = OUTPUT_FILE):
         self.data_file = data_file
@@ -44,7 +58,7 @@ class ParkRunPredictor:
         df = pd.read_csv(self.data_file)
         print(f"Loaded {len(df)} records")
         
-        required_columns = ['event_id', 'position', 'time', 'month', 'participants']
+        required_columns = ['event_id', 'position', 'time', 'month', 'n_in_month', 'participants']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
@@ -56,7 +70,7 @@ class ParkRunPredictor:
         return df
     
     def prepare_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        X = df[['relative_position', 'month', 'participants']].values
+        X = df[['relative_position', 'month', 'n_in_month', 'participants']].values
         y = df['time'].values.reshape(-1, 1)
         
         if np.any(np.isnan(X)):
@@ -82,7 +96,7 @@ class ParkRunPredictor:
         )
         
         self.model = models.Sequential([
-            layers.Input(shape=(3,)),
+            layers.Input(shape=(4,)),
             layers.Dense(256, activation='relu'),
             layers.BatchNormalization(),
             layers.Dropout(0.4),
@@ -239,10 +253,11 @@ class ParkRunPredictor:
         except Exception as e:
             print(f"Could not clean up files: {e}")
     
-    def predict(self, position: int, month: int = None) -> dict:
+    def predict(self, position: int, month: int = None, n_in_month: int = None) -> dict:
         if position < 1:
             raise ValueError("Position must be >= 1")
         
+        # Auto-detect next Saturday if month not provided
         if month is None:
             from datetime import datetime, timedelta
             today = datetime.now()
@@ -251,20 +266,24 @@ class ParkRunPredictor:
                 days_ahead += 7
             next_saturday = today + timedelta(days_ahead)
             month = next_saturday.month
+            
+            # Calculate which Saturday of the month
+            n_in_month = calculate_saturday_number(next_saturday)
         
         if month < 1 or month > 12:
             raise ValueError("Month must be between 1 and 12")
         
-        median_participants = self.df['participants'].median()
+        # Predict participants instead of using median
+        predicted_participants = self._predict_participants(month, n_in_month)
         
-        if pd.isna(median_participants) or median_participants <= 1:
-            raise ValueError(f"Invalid participants data: {median_participants}")
+        if pd.isna(predicted_participants) or predicted_participants <= 1:
+            raise ValueError(f"Invalid participants data: {predicted_participants}")
         
         # Prevent division by zero
-        if median_participants <= 1:
+        if predicted_participants <= 1:
             relative_position = 0.0 if position == 1 else 1.0
         else:
-            relative_position = (position - 1) / (median_participants - 1)
+            relative_position = (position - 1) / (predicted_participants - 1)
         
         # Clamp relative position to valid range [0, 1]
         relative_position = max(0.0, min(1.0, relative_position))
@@ -273,7 +292,7 @@ class ParkRunPredictor:
             raise ValueError(f"Invalid relative position: {relative_position}")
         
         # Ensure consistent input types and shapes
-        input_data = np.array([[float(relative_position), float(month), float(median_participants)]], dtype=np.float32)
+        input_data = np.array([[float(relative_position), float(month), float(n_in_month), float(predicted_participants)]], dtype=np.float32)
         
         if np.any(np.isnan(input_data)):
             raise ValueError(f"Input contains NaN values: {input_data}")
@@ -292,7 +311,7 @@ class ParkRunPredictor:
             'pace_min_per_km': pace_min_per_km,
             'position': position,
             'month': month,
-            'participants': median_participants
+            'participants': predicted_participants
         }
     
     def _predict_cached(self, input_scaled):
@@ -350,6 +369,37 @@ class ParkRunPredictor:
         
         with open(hash_file, 'w') as f:
             f.write(current_hash)
+    
+    def _predict_participants(self, month: int, n_in_month: int) -> float:
+        """
+        Predict participant count based on month, n_in_month, and historical trends.
+        Uses weighted average with exponential decay (recent events weighted more).
+        """
+        # Filter by month and n_in_month
+        matching = self.df[(self.df['month'] == month) & (self.df['n_in_month'] == n_in_month)]
+        
+        if len(matching) < 5:
+            # Fallback to month-only if not enough data
+            print(f"Not enough data for month={month}, n_in_month={n_in_month}, falling back to month-only")
+            matching = self.df[self.df['month'] == month]
+        
+        if len(matching) == 0:
+            # Ultimate fallback to overall median
+            print(f"No data for month={month}, using overall median")
+            return self.df['participants'].median()
+        
+        # Get unique event participants with weights
+        events = matching.groupby('event_id')['participants'].first().sort_index()
+        
+        if len(events) == 1:
+            return float(events.iloc[0])
+        
+        # Apply exponential decay weights (recent events weighted more)
+        weights = np.exp(np.linspace(-2, 0, len(events)))
+        weighted_avg = np.average(events.values, weights=weights)
+        
+        print(f"Predicted participants for month={month}, n_in_month={n_in_month}: {weighted_avg:.1f} (based on {len(events)} events)")
+        return weighted_avg
     
     def _predict_missing_times(self, df: pd.DataFrame) -> pd.DataFrame:
         """
