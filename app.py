@@ -71,24 +71,6 @@ def format_pace(pace_min_per_km: float) -> str:
     seconds = int((pace_min_per_km - minutes) * 60)
     return f"{minutes}:{seconds:02d}"
 
-def predict_direct(position: int, month: int = None) -> dict:
-    """Make prediction using the ML model."""
-    from park_run_speed_predict import ParkRunPredictor
-    
-    predictor = ParkRunPredictor()
-    predictor.run_full_pipeline()
-    
-    result = predictor.predict(position, month)
-    
-    return {
-        "success": True,
-        "time_seconds": float(result["time_seconds"]),
-        "time_minutes": float(result["time_minutes"]),
-        "pace_min_per_km": float(result["pace_min_per_km"]),
-        "position": int(result["position"]),
-        "month": int(result["month"]),
-        "participants": float(result["participants"])
-    }
 
 def render_header() -> None:
     """Render the main header with ParkRun link."""
@@ -156,13 +138,14 @@ def render_progress_bar(progress: int) -> str:
     </div>
     """
 
-def get_status_text(progress: int) -> str:
-    """Get status text based on progress."""
-    if progress < 30:
+def get_status_text(step: int) -> str:
+    """Get status text based on animation step."""
+    total_steps = ANIMATION_STEPS
+    if step < total_steps * 0.25:
         return "INITIALIZING..."
-    elif progress < 60:
+    elif step < total_steps * 0.5:
         return "ANALYZING DATA..."
-    elif progress < 90:
+    elif step < total_steps * 0.75:
         return "CALCULATING..."
     else:
         return "FINALIZING..."
@@ -180,10 +163,13 @@ def render_status_text(status: str) -> str:
     """
 
 def run_prediction_animation(position: int, month: int = None) -> dict:
-    """Run the prediction animation and return result."""
+    """Run the prediction animation with separate pipeline steps."""
+    from park_run_speed_predict import ParkRunPredictor
+    
     progress_container = st.empty()
     status_container = st.empty()
     
+    predictor = None
     result = None
     
     for i in range(ANIMATION_STEPS):
@@ -192,8 +178,24 @@ def run_prediction_animation(position: int, month: int = None) -> dict:
         status_text = get_status_text(i)
         status_container.markdown(render_status_text(status_text), unsafe_allow_html=True)
         
-        if i == PREDICTION_TRIGGER_PROGRESS and result is None:
-            result = predict_direct(position, month)
+        # Run full pipeline at the start of "ANALYZING DATA" phase
+        if status_text == "ANALYZING DATA..." and predictor is None:
+            predictor = ParkRunPredictor()
+            predictor.run_full_pipeline()
+        
+        # Run prediction at the start of "CALCULATING" phase
+        elif status_text == "CALCULATING..." and predictor is not None and result is None:
+            result = predictor.predict(position, month)
+            # Convert result to expected format
+            result = {
+                "success": True,
+                "time_seconds": float(result["time_seconds"]),
+                "time_minutes": float(result["time_minutes"]),
+                "pace_min_per_km": float(result["pace_min_per_km"]),
+                "position": int(result["position"]),
+                "month": int(result["month"]),
+                "participants": float(result["participants"])
+            }
         
         time.sleep(ANIMATION_DELAY)
     
