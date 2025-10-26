@@ -387,12 +387,12 @@ class ParkRunPredictor:
     def _predict_participants(self, month: int, n_in_month: int) -> float:
         """
         Predict participant count based on month, n_in_month, and historical trends.
-        Uses weighted average with exponential decay (recent events weighted more).
+        Uses improved algorithm with stronger recent weighting, trend analysis, and seasonal adjustments.
         """
         # Filter by month and n_in_month
         matching = self.df[(self.df['month'] == month) & (self.df['n_in_month'] == n_in_month)]
         
-        if len(matching) < 5:
+        if len(matching) < 3:
             # Fallback to month-only if not enough data
             print(f"Not enough data for month={month}, n_in_month={n_in_month}, falling back to month-only")
             matching = self.df[self.df['month'] == month]
@@ -402,18 +402,90 @@ class ParkRunPredictor:
             print(f"No data for month={month}, using overall median")
             return self.df['participants'].median()
         
-        # Get unique event participants with weights
+        # Get unique event participants sorted by event_id (chronological)
         events = matching.groupby('event_id')['participants'].first().sort_index()
         
         if len(events) == 1:
             return float(events.iloc[0])
         
-        # Apply exponential decay weights (recent events weighted more)
-        weights = np.exp(np.linspace(-2, 0, len(events)))
-        weighted_avg = np.average(events.values, weights=weights)
+        # Improved prediction algorithm
+        if len(events) >= 6:
+            # Use recent 6 events with strong weighting
+            recent_events = events.tail(6)
+            
+            # Strong exponential decay for recent events (more aggressive weighting)
+            weights = np.exp(np.linspace(-3, 0, len(recent_events)))
+            weighted_avg = np.average(recent_events.values, weights=weights)
+            
+            # Add trend adjustment based on recent 3 events
+            if len(recent_events) >= 3:
+                recent_3 = recent_events.tail(3).values
+                trend = np.mean(np.diff(recent_3))  # Average change between consecutive events
+                # Cap trend adjustment to avoid extreme predictions
+                trend_adjustment = np.clip(trend * 0.3, -10, 15)  # Apply 30% of trend, capped
+                weighted_avg += trend_adjustment
+            
+            print(f"Predicted participants for month={month}, n_in_month={n_in_month}: {weighted_avg:.1f} (based on {len(recent_events)} recent events, trend: {trend_adjustment:+.1f})")
+            
+        elif len(events) >= 3:
+            # Use all available events with moderate weighting
+            weights = np.exp(np.linspace(-2, 0, len(events)))
+            weighted_avg = np.average(events.values, weights=weights)
+            
+            # Add small trend adjustment
+            if len(events) >= 3:
+                recent_3 = events.tail(3).values
+                trend = np.mean(np.diff(recent_3))
+                # Cap trend adjustment to avoid extreme predictions
+                trend_adjustment = np.clip(trend * 0.2, -5, 10)  # Apply 20% of trend, capped
+                weighted_avg += trend_adjustment
+            
+            print(f"Predicted participants for month={month}, n_in_month={n_in_month}: {weighted_avg:.1f} (based on {len(events)} events, trend: {trend_adjustment:+.1f})")
+            
+        else:
+            # Fallback to simple average
+            weighted_avg = events.mean()
+            print(f"Predicted participants for month={month}, n_in_month={n_in_month}: {weighted_avg:.1f} (simple average of {len(events)} events)")
         
-        print(f"Predicted participants for month={month}, n_in_month={n_in_month}: {weighted_avg:.1f} (based on {len(events)} events)")
+        # Apply seasonal adjustment based on historical patterns
+        seasonal_factor = self._get_seasonal_adjustment(month, n_in_month)
+        weighted_avg *= seasonal_factor
+        
+        print(f"Final prediction with seasonal adjustment: {weighted_avg:.1f} (seasonal factor: {seasonal_factor:.2f})")
+        
         return weighted_avg
+    
+    def _get_seasonal_adjustment(self, month: int, n_in_month: int) -> float:
+        """
+        Get seasonal adjustment factor based on historical patterns.
+        Returns a multiplier to adjust predictions based on seasonal trends.
+        """
+        # Calculate historical seasonal patterns
+        seasonal_data = self.df.groupby(['month', 'n_in_month'])['participants'].agg(['mean', 'count']).reset_index()
+        
+        # Get data for this specific month/n_in_month
+        specific_data = seasonal_data[(seasonal_data['month'] == month) & (seasonal_data['n_in_month'] == n_in_month)]
+        
+        if len(specific_data) == 0 or specific_data['count'].iloc[0] < 3:
+            # Not enough data for this specific combination, use month-only
+            month_data = seasonal_data[seasonal_data['month'] == month]
+            if len(month_data) > 0:
+                specific_mean = month_data['participants'].mean()
+            else:
+                return 1.0  # No adjustment if no data
+        else:
+            specific_mean = specific_data['mean'].iloc[0]
+        
+        # Calculate overall mean for comparison
+        overall_mean = self.df['participants'].mean()
+        
+        # Calculate seasonal factor (how much this period differs from average)
+        seasonal_factor = specific_mean / overall_mean
+        
+        # Cap the adjustment to avoid extreme values
+        seasonal_factor = np.clip(seasonal_factor, 0.7, 1.4)
+        
+        return seasonal_factor
     
     def _predict_missing_times(self, df: pd.DataFrame) -> pd.DataFrame:
         """
