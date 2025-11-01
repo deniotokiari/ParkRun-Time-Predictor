@@ -62,6 +62,9 @@ class ParkRunScraper:
         try:
             print(f"Fetching: {url}")
             response = self.session.get(url, timeout=30)
+            print(f"Status code: {response.status_code}")
+            print(f"Response length: {len(response.text)}")
+            print(f"First 300 chars: {response.text[:300]}")
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:
@@ -171,9 +174,6 @@ class ParkRunScraper:
     
     def scrape_event(self, event_id: int, verbose: bool = True) -> tuple[Optional[int], int, int, List[ParkRunResult]]:
         html_content = self.get_results_page(event_id)
-
-        if verbose:
-            print(f"Content => {html_content}")
 
         if not html_content:
             return None, 0, 0, []
